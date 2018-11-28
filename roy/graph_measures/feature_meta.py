@@ -27,8 +27,8 @@ NODE_FEATURES = {
 
     # Didn't pass - but no logic
     "closeness_centrality": FeatureMeta(ClosenessCentralityCalculator, {"closeness"}),
-    # "communicability_betweenness_centrality": FeatureMeta(CommunicabilityBetweennessCentralityCalculator,
-    #                                                       {"communicability"}),
+    "communicability_betweenness_centrality": FeatureMeta(CommunicabilityBetweennessCentralityCalculator,
+                                                          {"communicability"}),
 
     # Passed
     "eccentricity": FeatureMeta(EccentricityCalculator, {"ecc"}),
@@ -40,7 +40,7 @@ NODE_FEATURES = {
     "general": FeatureMeta(GeneralCalculator, {"gen"}),
 
     # Isn't OK - also in previous version
-    # "hierarchy_energy": FeatureMeta(HierarchyEnergyCalculator, {"hierarchy"}),
+    "hierarchy_energy": FeatureMeta(HierarchyEnergyCalculator, {"hierarchy"}),
 
     # Passed
     "k_core": FeatureMeta(KCoreCalculator, {"kc"}),
