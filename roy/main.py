@@ -5,15 +5,23 @@ import numpy as np
 from graph_measures.features_infra.graph_features import GraphFeatures
 from graph_measures.loggers import PrintLogger
 from explore_exploit import ExploreExploit
+from explore_exploit import ExploreExploitF1
 from explore_exploit import StandardML
+from explore_exploit import grid_learn_xgb, grid_learn_nn
 from graph_measures import feature_meta
 import matplotlib.pyplot as plt
+from graph_measures.feature_meta import FeatureMeta
+from graph_measures.features_algorithms.vertices.neighbor_nodes_histogram import nth_neighbor_calculator
+
+import warnings
+warnings.filterwarnings("ignore")
 
 CHOSEN_FEATURES = feature_meta.NODE_FEATURES
-Data_Sets = ['signaling_pathways', 'subelj_cora',  'moreno_blogs']
-# Data_Sets = ['hard_challenge']
 
-epsilons = [0, 0.01, 0.05]
+# Data_Sets = ['moreno_blogs', 'signaling_pathways', 'subelj_cora']
+Data_Sets = ['cora2', 'citeseer2', 'pubmed2']
+
+epsilons = [0, 0.01, 0.03, 0.05, 0.075, 0.1]
 labels = range(2)
 Results = {x: {} for x in Data_Sets}
 for x in Data_Sets:
@@ -21,6 +29,15 @@ for x in Data_Sets:
         Results[x][y] = {}
 
 data_to_eps_to_steps = {(x + "_" + str(i)): {y: {} for y in epsilons} for i in labels for x in Data_Sets}
+
+
+def add_neighbor_feature():
+    neighbor_features = {
+        "first_neighbor_histogram": FeatureMeta(nth_neighbor_calculator(1), {"fnh", "first_neighbor"}),
+        "second_neighbor_histogram": FeatureMeta(nth_neighbor_calculator(2), {"snh", "second_neighbor"}),
+    }
+    CHOSEN_FEATURES.update(neighbor_features)
+    return None
 
 
 class LoadData:
@@ -32,33 +49,40 @@ class LoadData:
         self._logger = PrintLogger("MyLogger")
         self._features_mx = None
         self._tags = {}
+        self.gnx_ftr = None
         print(str(self._name)+" was loaded")
 
     def build_features(self):
-        gnx_ftr = GraphFeatures(self._gnx, CHOSEN_FEATURES, dir_path=os.path.join(self._data_dir, "features"),
-                                logger=self._logger)
-        gnx_ftr.build(should_dump=True)  # build ALL_FEATURES
-        self._features_mx = gnx_ftr.to_matrix(dtype=np.float32, mtype=np.matrix)
+        self.gnx_ftr = GraphFeatures(self._gnx, CHOSEN_FEATURES, dir_path=os.path.join(self._data_dir, "features"),
+                                     logger=self._logger)
+        self.gnx_ftr.build(should_dump=True)  # build ALL_FEATURES
+        self._features_mx = self.gnx_ftr.to_matrix(dtype=np.float32, mtype=np.matrix)
+        for i, node in enumerate(self._gnx):
+            self._gnx.node[node]['features'] = self._features_mx[i]
         print(self._features_mx.shape)
 
     def build_tags(self):
-            self._tags = []
-            with open(os.path.join(self._data_dir, "tags.txt"), "r") as f:
-                # for node, line in enumerate(f):
-                    # tag = str(line.rstrip("\n"))
-                    # tag = tag[1:tag.find('/', 1)]
-                for i, line in enumerate(f):
-                    node, tag = line.split()
-                    # if node == str(i+1):
-                    if node.isdigit():
-                        node = int(node)
-                    if tag.isdigit():
-                        tag = int(tag)
-                    self._gnx.node[node]['label'] = tag
-                    # if not(self._gnx.has_node(node)):
-                    #     self._gnx.add_node(node)
-                for node in sorted(self._gnx):
-                    self._tags.append(self._gnx.node[node]['label'])
+        self._gnx.graph["node_labels"] = []
+        self._tags = []
+        for node in self._gnx.node:
+            typ = type(node)
+            break
+        with open(os.path.join(self._data_dir, "tags.txt"), "r") as f:
+            # for node, line in enumerate(f):
+                # tag = str(line.rstrip("\n"))
+                # tag = tag[1:tag.find('/', 1)]
+            for i, line in enumerate(f):
+                node, tag = line.split()
+                node = typ(node)
+                if tag.isdigit():
+                    tag = int(tag)
+                self._gnx.node[node]['label'] = tag
+                if tag not in self._gnx.graph["node_labels"]:
+                    self._gnx.graph["node_labels"].append(tag)
+                # if not(self._gnx.has_node(node)):
+                #     self._gnx.add_node(node)
+            for node in sorted(self._gnx):
+                self._tags.append(self._gnx.node[node]['label'])
 
 
 class Learning:
@@ -93,6 +117,23 @@ class Learning:
                 data_to_eps_to_steps[self._name+"_"+str(label)][eps] = mean_steps_per_recall[recall]
                 Results[self._name][label]["eps_greedy_"+str(eps)] = mean_steps_per_recall
 
+    def run_eps_greedy_f1(self, learn_type="ML", budget=20, epochs=5):
+        print("finding f1 using greedy epsilon algorithm")
+
+        exploration = ExploreExploitF1(self._mx, self._tags, budget=budget)
+        for eps in epsilons:
+            print("epsilon =", eps)
+            mean_macrof1 = 0
+            mean_microf1 = 0
+            for i in range(1, epochs + 1):
+                macrof1, microf1 = exploration.run(eps=eps)
+                mean_macrof1 += macrof1
+                mean_microf1 += microf1
+            mean_macrof1 /= epochs
+            mean_microf1 /= epochs
+
+            print("the mean macroF1 is: " + str(mean_macrof1) + "the mean microF1 is: " + str(mean_microf1))
+
     def run_stand_recall(self, dist_calc_type="one_class", learn_type="ML", recall=0.7, epochs=3):
         # finds recall achieved per percent of revealed data
         print("finding recall using standard ml")
@@ -125,19 +166,22 @@ class Learning:
                                                   for x in temp_rand_results}
 
     def run_standard_ml(self, epochs=3):
-        sum_acc_ml = 0
+        sum_acc_rf = 0
         sum_acc_dl = 0
+        sum_acc_xgb = 0
         for i in range(epochs):
             learning = StandardML(self._mx, self._tags)
-            acc_ml, acc_dl = learning.run_acc()
-            print("accuracy of standard ml using random forest is: " + str(acc_ml)
-                  + " for deep is: " + str(acc_dl))
-            sum_acc_ml += acc_ml
+            acc_xgb, acc_rf, acc_dl = learning.run_acc()    # (print_train=True)
+            print("accuracy is:  XGB - " + str(acc_xgb) +
+                  "   RF - " + str(acc_rf) + "   NN - " + str(acc_dl))
+            sum_acc_rf += acc_rf
             sum_acc_dl += acc_dl
-        Results[self._name]['acc_ml'] = sum_acc_ml / epochs
-        Results[self._name]['acc_dl'] = sum_acc_dl / epochs
-        print("mean accuracy using random forest is: " + str(Results[self._name]['acc_ml'])
-              + " for deep is: " + str(Results[self._name]['acc_dl']))
+            sum_acc_xgb += acc_xgb
+        mean_acc_rf = sum_acc_rf / epochs
+        mean_acc_dl = sum_acc_dl / epochs
+        mean_acc_xgb = sum_acc_xgb / epochs
+        print("mean accuracy is: XGB - " + str(mean_acc_xgb) + "   RF - "
+              + str(mean_acc_rf) + "   NN - " + str(mean_acc_dl))
 
     # def run_al(self, learn_type="ML"):
     #     dist_calc_type = "one_class"
@@ -170,24 +214,26 @@ def my_plot():
             plt.ylabel('recall')
             fig = plt.gcf()
             fig.show()
-            fig.savefig(str(data_set)+"__"+str(label)+'_recall_per_time.png')
+            fig.savefig(str(data_set)+"_"+str(label)+'_recall_per_time.png')
 
 
 if __name__ == '__main__':
+    # add_neighbor_feature()
     for data in Data_Sets:
         dl = LoadData(data)
-        dl.build_features()
         dl.build_tags()
-        learn = Learning(dl._features_mx, dl._tags, dl._name)
-        learn.run_eps_greedy(learn_type="ML", recall=0.7, epochs=10)
-        learn.run_stand_recall(learn_type="ML", recall=0.7, epochs=10)
-        # learn.run_standard_ml(5)
-        # dl.run_eps_greedy("DL")
-        # dl.run_al("ML")
-        # # dl.run_al("DL")
-        # dl.run_standard_ml()
+        dl.build_features()
+        # learn = Learning(dl._features_mx, dl._tags, dl._name)
+        # learn.run_eps_greedy(learn_type="ML", recall=0.7, epochs=3)
+        # learn.run_stand_recall(learn_type="ML", recall=0.7, epochs=4)
+        # learn.run_standard_ml(epochs=2)
+        # learn.run_eps_greedy_f1(budget=20, epochs=7)
+        grid_learn_xgb(dl._name, dl._features_mx, dl._tags, epochs=20)
+        grid_learn_nn(dl._name, dl._features_mx, dl._tags, epochs=20)
+
     # df = pd.DataFrame(data_to_eps_to_steps)
     # print(df)
-    #
+    # print(df.to_string())
+
     # my_plot()
     print("done")

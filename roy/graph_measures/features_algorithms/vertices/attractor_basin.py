@@ -31,7 +31,7 @@ class AttractorBasinCalculator(NodeFeatureCalculator):
 
         return ab_out_dist, ab_in_dist
 
-    def _calculate(self, incluse: set):
+    def _calculate(self, include: set):
         ab_out_dist, ab_in_dist = self._initialize_attraction_basin_dist()
         avg_out = self._calculate_average_per_dist(len(self._gnx), ab_out_dist)
         avg_in = self._calculate_average_per_dist(len(self._gnx), ab_in_dist)

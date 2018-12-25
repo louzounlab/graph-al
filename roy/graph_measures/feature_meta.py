@@ -27,8 +27,8 @@ NODE_FEATURES = {
 
     # Didn't pass - but no logic
     "closeness_centrality": FeatureMeta(ClosenessCentralityCalculator, {"closeness"}),
-    "communicability_betweenness_centrality": FeatureMeta(CommunicabilityBetweennessCentralityCalculator,
-                                                          {"communicability"}),
+    # "communicability_betweenness_centrality": FeatureMeta(CommunicabilityBetweennessCentralityCalculator,
+    #                                                       {"communicability"}),
 
     # Passed
     "eccentricity": FeatureMeta(EccentricityCalculator, {"ecc"}),
