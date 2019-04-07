@@ -45,7 +45,7 @@ class NthNeighborNodeEdgeHistogramCalculator(NodeFeatureCalculator):
             for edge2, neighbor2, r_type2 in self._iter_edges_of_order(neighbor, order - 1):
                 yield (edge2, neighbor2, [r_type1] + r_type2)
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         # Translating each label to a relevant index to save memory
         # labels_map = {label: idx for idx, label in enumerate(self._gnx.graph["node_labels"])}
 

@@ -10,7 +10,7 @@ class AttractorBasinCalculator(NodeFeatureCalculator):
     def __init__(self, *args, alpha=2, **kwargs):
         super(AttractorBasinCalculator, self).__init__(*args, **kwargs)
         self._alpha = alpha
-        self._default_val = -1.
+        self._default_val = float('nan')
 
     def is_relevant(self):
         return self._gnx.is_directed()
@@ -19,7 +19,7 @@ class AttractorBasinCalculator(NodeFeatureCalculator):
         ab_in_dist = {}
         ab_out_dist = {}
 
-        # for each node we are calculating the the out and in distances for the other nodes in the graph
+        # for each node we are calculating the out and in distances for the other nodes in the graph
         dists = dict(weighted.all_pairs_dijkstra_path_length(self._gnx, len(self._gnx), weight='weight'))
         for node in self._gnx:
             if node not in dists:
@@ -31,7 +31,7 @@ class AttractorBasinCalculator(NodeFeatureCalculator):
 
         return ab_out_dist, ab_in_dist
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         ab_out_dist, ab_in_dist = self._initialize_attraction_basin_dist()
         avg_out = self._calculate_average_per_dist(len(self._gnx), ab_out_dist)
         avg_in = self._calculate_average_per_dist(len(self._gnx), ab_in_dist)
@@ -65,5 +65,5 @@ feature_entry = {
 
 
 if __name__ == "__main__":
-    from graph_measures.measure_tests.specific_feature_test import test_specific_feature
+    from measure_tests.specific_feature_test import test_specific_feature
     test_specific_feature(AttractorBasinCalculator, is_max_connected=True)

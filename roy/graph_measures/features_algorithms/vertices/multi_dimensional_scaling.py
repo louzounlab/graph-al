@@ -13,7 +13,7 @@ class MultiDimensionalScalingCalculator(NodeFeatureCalculator):
     def is_relevant(self):
         return True
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         self._features = {}
         for graph in nx.connected_component_subgraphs(self._gnx.to_undirected()):
             nodes_order = sorted(graph)

@@ -7,7 +7,7 @@ class KCoreCalculator(NodeFeatureCalculator):
     def is_relevant(self):
         return True
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         loopless_gnx = self._gnx.copy()
         loopless_gnx.remove_edges_from(nx.selfloop_edges(loopless_gnx))
         self._features = nx.core_number(loopless_gnx)

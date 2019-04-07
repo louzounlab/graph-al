@@ -4,7 +4,7 @@ from graph_measures.features_infra.feature_calculators import NodeFeatureCalcula
 
 
 class EccentricityCalculator(NodeFeatureCalculator):
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         dists = {src: neighbors for src, neighbors in nx.all_pairs_shortest_path_length(self._gnx)}
         self._features = {node: max(neighbors.values()) for node, neighbors in dists.items()}
 

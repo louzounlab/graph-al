@@ -9,7 +9,7 @@ class FiedlerVectorCalculator(NodeFeatureCalculator):
         # Working on every connected component by itself
         self._features = dict(zip(self._gnx, alg_connectivity.fiedler_vector(self._gnx)))
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         self._features = {}
 
         for graph in nx.connected_component_subgraphs(self._gnx):

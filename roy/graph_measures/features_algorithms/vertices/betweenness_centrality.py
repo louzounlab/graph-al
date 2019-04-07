@@ -8,7 +8,7 @@ class BetweennessCentralityCalculator(NodeFeatureCalculator):
         super(BetweennessCentralityCalculator, self).__init__(*args, **kwargs)
         self._is_normalized = normalized
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         self._features = nx.betweenness_centrality(self._gnx, normalized=self._is_normalized)
 
     def is_relevant(self):
@@ -21,5 +21,5 @@ feature_entry = {
 
 
 if __name__ == "__main__":
-    from graph_measures.measure_tests.specific_feature_test import test_specific_feature
+    from measure_tests.specific_feature_test import test_specific_feature
     test_specific_feature(BetweennessCentralityCalculator, is_max_connected=True)

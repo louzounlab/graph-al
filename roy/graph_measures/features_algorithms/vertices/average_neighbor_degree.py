@@ -7,7 +7,7 @@ class AverageNeighborDegreeCalculator(NodeFeatureCalculator):
     def is_relevant(self):
         return True
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         self._features = nx.average_neighbor_degree(self._gnx)
 
 
@@ -17,5 +17,5 @@ feature_entry = {
 
 
 if __name__ == "__main__":
-    from graph_measures.measure_tests.specific_feature_test import test_specific_feature
+    from measure_tests.specific_feature_test import test_specific_feature
     test_specific_feature(AverageNeighborDegreeCalculator, is_max_connected=True)

@@ -5,9 +5,13 @@ from itertools import chain
 
 import networkx as nx
 import numpy as np
+
 # from scipy.stats import zscore
 
-from graph_measures.loggers import EmptyLogger
+try:
+    from graph_measures.loggers import EmptyLogger
+except Exception as e:
+    from graph_measures.loggers import EmptyLogger
 
 
 # Old zscore code.. should use scipy.stats.zscore
@@ -26,12 +30,13 @@ def z_scoring(matrix):
 
 def time_log(func):
     def wrapper(self, *args, **kwargs):
-        start_time = datetime.now()
-        self._logger.debug("Start %s" % (self._print_name,))
+        if kwargs['print_time']:
+            start_time = datetime.now()
+            self._logger.debug("Start %s" % (self._print_name,))
         res = func(self, *args, **kwargs)
-        cur_time = datetime.now()
-        self._logger.debug("Finish %s at %s" % (self._print_name, cur_time - start_time,))
-        self._is_loaded = True  # Very bad place to put it - choose somewhere else
+        if kwargs['print_time']:
+            cur_time = datetime.now()
+            self._logger.debug("Finish %s at %s" % (self._print_name, cur_time - start_time,))
         return res
 
     return wrapper
@@ -40,13 +45,12 @@ def time_log(func):
 class FeatureCalculator:
     META_VALUES = ["_gnx", "_logger"]
 
-    def __init__(self, gnx, logger=None):
+    def __init__(self, gnx, *args, logger=None, **kwargs):
         # super(FeatureCalculator, self).__init__()
         self._is_loaded = False
         self._features = {}
         self._logger = EmptyLogger() if logger is None else logger
         self._gnx = gnx
-        self._sample_node = list(self._gnx.nodes)[0]
         self._print_name = self.print_name()
         self._default_val = 0
 
@@ -77,7 +81,7 @@ class FeatureCalculator:
         return "_".join(map(lambda x: x.lower(), split_name))
 
     @time_log
-    def build(self, include: set = None):
+    def build(self, include: set = None, print_time=True, is_regression=False):
         # Don't calculate it!
         if not self.is_relevant():
             self._is_loaded = True
@@ -85,11 +89,11 @@ class FeatureCalculator:
 
         if include is None:
             include = set()
-        self._calculate(include)
+        self._calculate(include, is_regression)
         self._is_loaded = True
         return self._features
 
-    def _calculate(self, include):
+    def _calculate(self, include, is_regression):
         raise NotImplementedError()
 
     def _get_feature(self, element):
@@ -98,11 +102,7 @@ class FeatureCalculator:
     def _params_order(self, input_order: list = None):
         raise NotImplementedError()
 
-    def __len__(self):
-        sample_output = self._get_feature(self._sample_node).tolist()
-        return len(sample_output) if type(sample_output) == list else 1
-
-    def to_matrix(self, params_order: list = None, mtype=np.matrix, should_zscore: bool=True):
+    def to_matrix(self, params_order: list = None, mtype=np.matrix, should_zscore: bool = True):
         mx = np.matrix([self._get_feature(element) for element in self._params_order(params_order)]).astype(np.float32)
         # infinity is possible due to the change of the matrix type (i.e. overflow from 64 bit to 32 bit)
         mx[np.isinf(mx)] = self._default_val

@@ -13,50 +13,79 @@ from scipy import sparse
 from graph_measures.features_infra.feature_calculators import NodeFeatureCalculator, FeatureMeta
 from graph_measures.loggers import PrintLogger
 
+from datetime import datetime
+
 
 class NthNeighborNodeHistogramCalculator(NodeFeatureCalculator):
     def __init__(self, neighbor_order, *args, **kwargs):
         super(NthNeighborNodeHistogramCalculator, self).__init__(*args, **kwargs)
-        self._num_classes = len(self._gnx.graph["labels"])  # ["node_labels"])
+        self.labels_to_consider = kwargs.get('labels_to_consider', self._gnx.graph["node_labels"])
+        self._num_classes = len(self.labels_to_consider)
         self._neighbor_order = neighbor_order
         self._relation_types = ["".join(x) for x in cartesian(*(["io"] * self._neighbor_order))]
         self._print_name += "_%d" % (neighbor_order,)
         counter = {i: 0 for i in range(self._num_classes)}
         if self._gnx.is_directed():
             self._features = {node: {rtype: counter.copy() for rtype in self._relation_types} for node in self._gnx}
+            self._reg_features = {node: {rtype: [] for rtype in self._relation_types} for node in self._gnx}
         else:
             self._features = {node: counter.copy() for node in self._gnx}
 
     def is_relevant(self):
-        is_empty = True if len(self._neighbor_order) == 0 else False
-        # undirected is not supported yet
-        return self._gnx.is_directed() and not is_empty
+        is_empty = True if self._neighbor_order == 0 else False
+        return not is_empty
+        # # undirected is not supported yet
+        # return self._gnx.is_directed() and not is_empty
 
     def _get_node_neighbors_with_types(self, node):
         if self._gnx.is_directed():
             for in_edge in self._gnx.in_edges(node):
                 yield ("i", in_edge[0])
 
-        for out_edge in self._gnx.out_edges(node):
-            yield ("o", out_edge[1])
+            for out_edge in self._gnx.out_edges(node):
+                yield ("o", out_edge[1])
+        else:
+            for edge in self._gnx.edges(node):
+                yield (edge[1])
 
     def _iter_nodes_of_order(self, node, order: int):
-        if 0 >= order:
-            yield [], node
-            return
-        for r_type, neighbor in self._get_node_neighbors_with_types(node):
-            for r_type2, neighbor2 in self._iter_nodes_of_order(neighbor, order - 1):
-                yield ([r_type] + r_type2, neighbor2)
-
-    def _calculate(self, include: set):
-        # Translating each label to a relevant index to save memory
-        labels_map = {label: idx for idx, label in enumerate(self._gnx.graph["node_labels"])}
-
         if self._gnx.is_directed():
-            self._calculate_directed(include, labels_map)
+            if 0 >= order:
+                yield [], node
+                return
+            for r_type, neighbor in self._get_node_neighbors_with_types(node):
+                for r_type2, neighbor2 in self._iter_nodes_of_order(neighbor, order - 1):
+                    yield ([r_type] + r_type2, neighbor2)
         else:
-            # not supported yet - will never arrive here because of is_relevant
-            self._calculate_undirected(include, labels_map)
+            if 0 >= order:
+                yield node
+                return
+            for neighbor in self._get_node_neighbors_with_types(node):
+                for neighbor2 in self._iter_nodes_of_order(neighbor, order - 1):
+                    yield (neighbor2)
+
+    def _calculate(self, include: set, is_regression=False):
+
+        if is_regression:
+            if self._gnx.is_directed():
+                self._calculate_directed_regression(include)
+                temp = {node: {rtype: np.mean(self._reg_features[node][rtype], axis=0)
+                               for rtype in self._relation_types} for node in self._gnx}
+                self._features = {node: {rtype: {i: 0 if temp[node][rtype].size == 1 else temp[node][rtype][i]
+                                                 for i in range(self._num_classes)}
+                                         for rtype in self._relation_types} for node in self._gnx}
+            else:
+                # not implemented yet
+                pass
+        else:
+            # Translating each label to a relevant index to save memory
+            labels_map = {label: idx for idx, label in enumerate(self.labels_to_consider)}
+            if self._gnx.is_directed():
+                # self._calculate_directed2(include, labels_map)
+                self._calculate_directed2(include, labels_map)
+            else:
+                # self._calculate_undirected(include, labels_map)
+                self._calculate_undirected2(include, labels_map)
 
     def _calculate_directed(self, include: set, labels_map):
         for node in self._gnx:
@@ -73,9 +102,61 @@ class NthNeighborNodeHistogramCalculator(NodeFeatureCalculator):
                     neighbor_color = labels_map[neighbor_color]
                 self._features[node][full_type][neighbor_color] += 1
 
+    def _calculate_directed2(self, include: set, labels_map):
+        for node in include:
+            # in case the label is already the index of the label in the labels_map
+            color = self._gnx.node[node]["label"]
+            if color in labels_map:
+                color = labels_map[color]
+                history = {rtype: set() for rtype in self._relation_types}
+                for r_type, neighbor in self._iter_nodes_of_order(node, self._neighbor_order):
+                    full_type = "".join(r_type)
+                    if node == neighbor or neighbor in history[full_type]:
+                        continue
+                    history[full_type].add(neighbor)
+
+                    self._features[neighbor][full_type][color] += 1
+
+    def _calculate_directed_regression(self, include: set):
+        for node in include:
+            # in case the label is already the index of the label in the labels_map
+            color = self._gnx.node[node]["label"]
+            history = {rtype: set() for rtype in self._relation_types}
+            for r_type, neighbor in self._iter_nodes_of_order(node, self._neighbor_order):
+                full_type = "".join(r_type)
+                if node == neighbor or neighbor in history[full_type]:
+                    continue
+                history[full_type].add(neighbor)
+
+                self._reg_features[neighbor][full_type].append(color)
+
     def _calculate_undirected(self, include: set, labels_map):
         for node in self._gnx:
-            pass
+            history = set()
+            for neighbor in self._iter_nodes_of_order(node, self._neighbor_order):
+                if node == neighbor or neighbor not in include or neighbor in history:
+                    continue
+                history.add(neighbor)
+
+                # in case the label is already the index of the label in the labels_map
+                neighbor_color = self._gnx.node[neighbor]["label"]
+                if neighbor_color in labels_map:
+                    neighbor_color = labels_map[neighbor_color]
+                self._features[node][neighbor_color] += 1
+
+    def _calculate_undirected2(self, include: set, labels_map):
+        for node in include:
+            # in case the label is already the index of the label in the labels_map
+            color = self._gnx.node[node]["label"]
+            if color in labels_map:
+                color = labels_map[color]
+            history = set()
+            for neighbor in self._iter_nodes_of_order(node, self._neighbor_order):
+                if node == neighbor or neighbor in history:
+                    continue
+                history.add(neighbor)
+
+                self._features[neighbor][color] += 1
 
     def _get_feature(self, element):
         cur_feature = self._features[element]
@@ -85,14 +166,14 @@ class NthNeighborNodeHistogramCalculator(NodeFeatureCalculator):
         return np.array([[cur_feature[r_type][x] for x in range(self._num_classes)]
                          for r_type in self._relation_types]).flatten()
 
-
     # def _to_ndarray(self):
     #     mx = np.matrix([self._get_feature(node) for node in self._nodes()])
     #     return mx.astype(np.float32)
 
 
-def nth_neighbor_calculator(order):
-    return partial(NthNeighborNodeHistogramCalculator, order)
+def nth_neighbor_calculator(order, **kwargs):
+    # Kwargs are used to pass the labels to consider argument
+    return partial(NthNeighborNodeHistogramCalculator, order, **kwargs)
 
 
 feature_entry = {
@@ -116,9 +197,9 @@ def test_neighbor_histogram():
     gnx = build_sample_graph([('a', 'b'), ('b', 'c'), ('a', 'd'), ('c', 'd'), ('e', 'f'), ('f', 'a')], node_colors,
                              all_colors)
     logger = PrintLogger()
-    calc = NthNeighborNodeHistogramCalculator(2, gnx, logger=logger)
-    calc._calculate()
-    n = calc._to_ndarray()
+    calc = NthNeighborNodeHistogramCalculator(2, gnx, logger=logger, labels_to_consider=all_colors[:3])
+    calc._calculate(include=set(gnx.nodes))
+    # n = calc._to_ndarray()
     # (self, gnx, name, abbreviations, logger=None):
     # m = calculate_second_neighbor_vector(gnx, colors)
     print('bla')

@@ -13,7 +13,7 @@ class PageRankCalculator(NodeFeatureCalculator):
         #       graph with two directed edges for each undirected edge.
         return True
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         self._features = nx.pagerank(self._gnx, alpha=self._alpha)
 
 

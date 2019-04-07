@@ -15,7 +15,7 @@ class FlowCalculator(NodeFeatureCalculator):
     def is_relevant(self):
         return self._gnx.is_directed()
 
-    def _calculate(self, threshold):
+    def _calculate(self, threshold, is_regression=False):
         num_nodes = len(self._gnx)
         directed_dists = dict(weighted.all_pairs_dijkstra_path_length(self._gnx, num_nodes, weight='weight'))
         undirected_dists = dict(

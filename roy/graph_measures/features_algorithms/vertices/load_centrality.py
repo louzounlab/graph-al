@@ -7,7 +7,7 @@ class LoadCentralityCalculator(NodeFeatureCalculator):
     def is_relevant(self):
         return True
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         self._features = nx.load_centrality(self._gnx)
 
 

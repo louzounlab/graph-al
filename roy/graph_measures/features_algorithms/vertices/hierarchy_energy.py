@@ -8,7 +8,7 @@ class HierarchyEnergyCalculator(NodeFeatureCalculator):
         # TODO: finish this calculator
         return False
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         self._nodes_order = sorted(self._gnx)
         hierarchy_energy_list, vet_index = self._calculate_hierarchy_energy_index()
         self._features = dict(zip(vet_index, hierarchy_energy_list))

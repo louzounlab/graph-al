@@ -34,11 +34,11 @@ class Worker(Process):
 
 # object that calculates & holds a list of features of a graph.
 class GraphFeatures(dict):
-    def __init__(self, gnx, features, dir_path, logger=None, is_max_connected=False):
-        self.is_build = False
+    def __init__(self, gnx, features, dir_path, logger=None, is_max_connected=False, is_regression=False):
         self._base_dir = dir_path
         self._logger = EmptyLogger() if logger is None else logger
         self._matrix = None
+        self._regression = is_regression
 
         if is_max_connected:
             if gnx.is_directed():
@@ -59,19 +59,20 @@ class GraphFeatures(dict):
     def graph(self):
         return self._gnx
 
-    def _build_serially(self, include, force_build: bool = False, dump_path: str = None):
+    def _build_serially(self, include, force_build: bool = False, dump_path: str = None, print_time=True):
         if dump_path is not None and self._gnx is not None:
             pickle.dump(self._gnx, open(self._feature_path("gnx", dump_path), "wb"))
         for name, feature in self.items():
-            if force_build or not os.path.exists(self._feature_path(name)):
-                feature.build(include=include)
+            if force_build or not os.path.exists(self._feature_path(name)) or 'neighbor_histogram' in name:
+                feature.build(include=include, print_time=print_time, is_regression=self._regression)
                 if dump_path is not None:
                     self._dump_feature(name, feature, dump_path)
             else:
                 self._load_feature(name)
 
     # a single process means it is calculated serially
-    def build(self, num_processes: int = 1, include: set = None, should_dump: bool = False, force_build=False):  # , exclude: set=None):
+    def build(self, num_processes: int = 1, include: set = None, should_dump: bool = False, force_build=False,
+              print_time=True):  # , exclude: set=None):
         # if exclude is None:
         #     exclude = set()
         if include is None:
@@ -83,7 +84,7 @@ class GraphFeatures(dict):
                 dump_path = self._base_dir
                 if not os.path.exists(dump_path):
                     os.makedirs(dump_path)
-            return self._build_serially(include, dump_path=dump_path, force_build=force_build)
+            return self._build_serially(include, dump_path=dump_path, force_build=force_build, print_time=print_time)
 
         request_queue = Queue()
         workers = [Worker(request_queue, self, include, logger=self._logger) for _ in range(num_processes)]
@@ -102,8 +103,6 @@ class GraphFeatures(dict):
         # Joining all workers
         for worker in workers:
             worker.join()
-
-        self.is_build = True
 
     def _load_feature(self, name):
         if self._gnx is None:

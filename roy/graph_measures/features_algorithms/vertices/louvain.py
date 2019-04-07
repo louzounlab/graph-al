@@ -10,7 +10,7 @@ class LouvainCalculator(NodeFeatureCalculator):
         # relevant only for undirected graphs
         return not self._gnx.is_directed()
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         partition = community.best_partition(self._gnx)
         com_size_dict = Counter(partition.values())
         self._features = {node: com_size_dict[partition[node]] for node in self._gnx}

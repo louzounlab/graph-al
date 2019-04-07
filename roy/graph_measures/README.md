@@ -1,7 +1,12 @@
-# topo-graph-features
+# Topological Graph Features
+
 Topological feature calculators infrastructure.
 
-The feature calculators are working on a gnx instance.
+### C code
+For installation and running instructions for the C code, refer to the [manual](features_algorithms/accelerated_graph_features/Cache%20Accelerated%20Graph%20Features%20Manual.pdf).
+
+## Calculating Features
+The feature calculators work on a gnx instance.
 At first we'll define a graph (networkx Graph) and a logger
 
 ```python

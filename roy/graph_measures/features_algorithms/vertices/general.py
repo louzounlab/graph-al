@@ -5,7 +5,7 @@ class GeneralCalculator(NodeFeatureCalculator):
     def is_relevant(self):
         return True
 
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         if self._gnx.is_directed():
             self._features = {node: (in_deg, out_deg) for
                               (node, out_deg), (_, in_deg) in zip(self._gnx.out_degree(), self._gnx.in_degree())}

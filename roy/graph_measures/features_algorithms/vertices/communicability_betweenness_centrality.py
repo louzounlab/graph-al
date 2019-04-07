@@ -4,7 +4,7 @@ from graph_measures.features_infra.feature_calculators import NodeFeatureCalcula
 
 
 class CommunicabilityBetweennessCentralityCalculator(NodeFeatureCalculator):
-    def _calculate(self, include: set):
+    def _calculate(self, include: set, is_regression=False):
         self._features = nx.communicability_betweenness_centrality(self._gnx)
 
     def is_relevant(self):
@@ -18,5 +18,5 @@ feature_entry = {
 
 
 if __name__ == "__main__":
-    from graph_measures.measure_tests.specific_feature_test import test_specific_feature
+    from measure_tests.specific_feature_test import test_specific_feature
     test_specific_feature(CommunicabilityBetweennessCentralityCalculator, is_max_connected=True)

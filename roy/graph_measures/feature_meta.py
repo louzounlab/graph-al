@@ -4,7 +4,7 @@ from graph_measures.features_algorithms.vertices.betweenness_centrality import B
 from graph_measures.features_algorithms.vertices.bfs_moments import BfsMomentsCalculator
 from graph_measures.features_algorithms.vertices.closeness_centrality import ClosenessCentralityCalculator
 from graph_measures.features_algorithms.vertices.communicability_betweenness_centrality import \
-     CommunicabilityBetweennessCentralityCalculator
+    CommunicabilityBetweennessCentralityCalculator
 from graph_measures.features_algorithms.vertices.eccentricity import EccentricityCalculator
 from graph_measures.features_algorithms.vertices.fiedler_vector import FiedlerVectorCalculator
 from graph_measures.features_algorithms.vertices.flow import FlowCalculator
@@ -13,10 +13,17 @@ from graph_measures.features_algorithms.vertices.hierarchy_energy import Hierarc
 from graph_measures.features_algorithms.vertices.k_core import KCoreCalculator
 from graph_measures.features_algorithms.vertices.load_centrality import LoadCentralityCalculator
 from graph_measures.features_algorithms.vertices.louvain import LouvainCalculator
-from graph_measures.features_algorithms.vertices.neighbor_nodes_histogram import nth_neighbor_calculator
 from graph_measures.features_algorithms.vertices.motifs import nth_nodes_motif
 from graph_measures.features_algorithms.vertices.page_rank import PageRankCalculator
 from graph_measures.features_infra.feature_calculators import FeatureMeta, FeatureCalculator
+from graph_measures.features_algorithms.vertices.neighbor_nodes_histogram import nth_neighbor_calculator
+# from graph_measures.features_algorithms.accelerated_graph_features.attractor_basin import AttractorBasinCalculator
+# from graph_measures.features_algorithms.accelerated_graph_features.bfs_moments import BfsMomentsCalculator
+# from graph_measures.features_algorithms.accelerated_graph_features.flow import FlowCalculator
+# from graph_measures.features_algorithms.accelerated_graph_features.k_core import KCoreCalculator
+# from graph_measures.features_algorithms.accelerated_graph_features.motifs import nth_nodes_motif
+# from graph_measures.features_algorithms.accelerated_graph_features.page_rank import PageRankCalculator
+
 
 NODE_FEATURES = {
     # Passed
@@ -40,7 +47,7 @@ NODE_FEATURES = {
     "general": FeatureMeta(GeneralCalculator, {"gen"}),
 
     # Isn't OK - also in previous version
-    "hierarchy_energy": FeatureMeta(HierarchyEnergyCalculator, {"hierarchy"}),
+    # "hierarchy_energy": FeatureMeta(HierarchyEnergyCalculator, {"hierarchy"}),
 
     # Passed
     "k_core": FeatureMeta(KCoreCalculator, {"kc"}),
@@ -57,6 +64,11 @@ NODE_FEATURES = {
     "motif4": FeatureMeta(nth_nodes_motif(4), {"m4"}),
     # "first_neighbor_histogram": FeatureMeta(nth_neighbor_calculator(1), {"fnh", "first_neighbor"}),
     # "second_neighbor_histogram": FeatureMeta(nth_neighbor_calculator(2), {"snh", "second_neighbor"}),
+}
+
+NEIGHBOR_FEATURES = {
+    "first_neighbor_histogram": FeatureMeta(nth_neighbor_calculator(1), {"fnh", "first_neighbor"}),
+    "second_neighbor_histogram": FeatureMeta(nth_neighbor_calculator(2), {"snh", "second_neighbor"}),
 }
 
 GRAPH_FEATURES = {
@@ -97,8 +109,8 @@ TEST_FEATURES = {
 
 def test_main():
     import numpy as np
-    from features_infra.graph_features import GraphFeatures
-    from loggers import PrintLogger
+    from graph_measures.features_infra.graph_features import GraphFeatures
+    from graph_measures.loggers import PrintLogger
     import os
     import pickle
     import networkx as nx
