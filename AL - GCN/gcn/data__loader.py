@@ -223,7 +223,7 @@ class GraphLoader(object):
         else:
             self.build_features_matrix(print_time=True)
 
-        # load content
+        # # load content
         # if os.path.exists(os.path.join(self._data_path, "content.pkl")):
         #     self._content = pickle.load(open(os.path.join(self._data_path, "content.pkl"), "rb"))
         # bow_mx = np.vstack([self._gnx.node[node]['content'] for node in self._nodes_order]).astype(DTYPE)
@@ -437,6 +437,9 @@ class GraphLoader(object):
             train_set = set()
 
         feat_mx = self.get_features(features_meta, train_set, print_time)
+
+        # replace all nan values of attractor basin to 100
+        feat_mx[np.isnan(feat_mx)] = 100
 
         # ratio = 10 ** np.ceil(np.log10(abs(np.mean(topo_mx) / np.mean(self._bow_mx))))
         # topo_mx /= ratio

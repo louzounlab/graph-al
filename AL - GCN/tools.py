@@ -1,6 +1,12 @@
+import random
+import timeit
+
 from scipy.spatial.distance import cdist
 import numpy as np
 from sklearn import svm
+from sklearn.covariance import EllipticEnvelope
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
 from collections import Counter
 
 from sklearn.ensemble import RandomForestClassifier
@@ -19,10 +25,20 @@ class DistanceCalculator:
     #     self._type = typ
 
     @staticmethod
-    def euclidean(mx1, mx2, typ="euclidean", scores=False):
-        # Get euclidean distances as 2D array
-        dists = cdist(mx1, mx2, typ)
+    def metric(mx1, mx2, typ="euclidean", inv_cov=None, average_distance=False, scores=False):
+        # Get distances as 2D array
+        if typ == 'mahalanobis':
+            if inv_cov is None:
+                inv_cov = np.linalg.pinv(np.cov(np.vstack([mx1, mx2]).T))
+            dists = cdist(mx1, mx2, typ, VI=inv_cov)
+        else:
+            dists = cdist(mx1, mx2, typ)
         if scores:
+            if average_distance:
+                means = dists.mean(axis=1)
+                return np.array([np.array([dists[i][j] for j in range(len(dists[i]))
+                                           if dists[i][j] < means[i]]).mean() for i in range(len(dists))])
+
             # the distance to the closest train node
             return dists.min(axis=1)
         # return the most distant rows
@@ -30,12 +46,21 @@ class DistanceCalculator:
 
     # TODO: check more outlier detection methods, https://scikit-learn.org/stable/modules/outlier_detection.html
     @staticmethod
-    def one_class_learning(x_train, x_test, scores=False):
-        model = svm.OneClassSVM(gamma='scale')
+    def one_class_learning(x_train, x_test, typ='one_class_svm', scores=False):
+        if typ == 'isolation_forest':
+            model = IsolationForest(behaviour='new')
+        elif typ == 'local_outlier_factor':
+            model = LocalOutlierFactor(novelty=True)
+        elif typ == 'robust_covariance':
+            model = EllipticEnvelope()
+        else:
+            model = svm.OneClassSVM(gamma='scale')
+
         model.fit(x_train)
-        outlier_scores = 1 - model.score_samples(x_test)
         if scores:
+            outlier_scores = 1 - model.decision_function(x_test)
             return outlier_scores
+        outlier_scores = 1 - model.score_samples(x_test)
         return outlier_scores.argmax()
 
         # pred = model.predict(x_test)
@@ -69,7 +94,7 @@ def machine_learning(x_train, y_train, x_test, batch_size=10, clf=None, is_stand
 
 
 def xgb_learning(x_data, y_data, x_test, batch_size=10, n_classes=2, is_stand_ml=False, is_al=False, is_f1=False):
-    x_train, x_val, y_train, y_val = train_test_split(x_data, y_data, train_size=0.8, random_state=0)
+    x_train, x_val, y_train, y_val = train_test_split(x_data, y_data, train_size=0.85, random_state=0)
 
     dtrain = xgb.DMatrix(x_train, label=y_train, silent=True)
     dtest = xgb.DMatrix(x_test, silent=True)
@@ -210,63 +235,36 @@ class StandardML:
 
         return ml_recall, ml_steps, rand_recall, rand_steps
 
-    def run_acc(self, train_size=0.8, print_train=False):
+    def run_acc(self, train_size=0.8, print_train=False, only_acc=True):
         self._init(train_size=train_size, recall=False)
-        # XGBoost
-        pred_xg = machine_learning(self.x_train, self.y_train, self.x_test, is_stand_ml=True)
-        acc_xg = accuracy_score(pred_xg, self.y_test)
 
-        # Random Forest
-        pred_rf = machine_learning(self.x_train, self.y_train, self.x_test, is_stand_ml=True)
-        acc_rf = accuracy_score(pred_rf, self.y_test)
-
-        # Neural Network
-        net = FeedForwardNet(NeuralNet(classes=self._n_class), gpu=True)
-        net.set_data(self.x_train, self.y_train)
-        net.train(total_epoch=100, stop_loss=True)
-        pred_dl = net.predict(self.x_test)
-        acc_dl = accuracy_score(pred_dl, self.y_test)
-
-        if print_train:
-            pred_xg = xgb_learning(self.x_train, self.y_train, self.x_train, is_stand_ml=True)
-            train_acc_xg = accuracy_score(pred_xg, self.y_train)
-
-            pred_rf = machine_learning(self.x_train, self.y_train, self.x_train, is_stand_ml=True)
-            train_acc_rf = accuracy_score(pred_rf, self.y_train)
-
-            pred_dl = net.predict(self.x_train)
-            train_acc_dl = accuracy_score(pred_dl, self.y_train)
-
-            print("train accuracy is:  XGB - " + str(train_acc_xg) +
-                  "   RF - " + str(train_acc_rf) + "   NN - " + str(train_acc_dl))
-
-        return acc_xg, acc_rf, acc_dl
+        return check_scores(self.x_train, self.y_train, self.x_test, self.y_test, n_classes=self._n_class,
+                            print_train=print_train, only_acc=only_acc)
 
 
-def check_acc(x_train, y_train, x_test, y_test, n_classes=2, print_train=False):
+def check_scores(x_train, y_train, x_test, y_test, n_classes=2, print_train=False, only_acc=False, class_weights=None):
     # XGBoost
     pred_xgb = xgb_learning(x_train, y_train, x_test, n_classes=n_classes, is_stand_ml=True)
-    # acc_xgb = accuracy_score(pred_xgb, y_test)
-    acc_xgb = f1_score(y_test, pred_xgb, average='micro')
+    acc_xgb = accuracy_score(pred_xgb, y_test)
+    # acc_xgb = 0
 
     # Random Forest
     pred_rf = machine_learning(x_train, y_train, x_test, is_stand_ml=True)
-    # acc_rf = accuracy_score(pred_rf, y_test)
-    acc_rf = f1_score(y_test, pred_rf, average='micro')
+    acc_rf = accuracy_score(pred_rf, y_test)
+    # acc_rf = 0
 
     # Neural Network
     l1 = x_train.shape[1]
     layers = (l1, int(l1*2), int(l1/2))
-    net = FeedForwardNet(NeuralNet(classes=n_classes, layers_dim=layers), gpu=False)
+    net = FeedForwardNet(NeuralNet(classes=n_classes, layers_dim=layers, lr=0.01, activation_func='relu',
+                                   drop_out=0.3, l2_penalty=0.001), class_weights=class_weights, gpu=True)
+    # net = FeedForwardNet(NeuralNet(classes=n_classes, layers_dim=layers), gpu=False)
     net.set_data(x_train, y_train)
-    net.train(total_epoch=100, stop_loss=True)
+    net.train(total_epoch=500, stop_loss=True)
     pred_dl = net.predict(x_test)
-    acc_dl = f1_score(y_test, pred_dl, average='micro')
-    # acc_dl = accuracy_score(pred_dl, y_test)
-    # acc_dl = 0
+    acc_dl = accuracy_score(pred_dl, y_test)
 
-    print("accuracy is:  XGB - " + str(acc_xgb) +
-          "   RF - " + str(acc_rf) + "   NN - " + str(acc_dl))
+    print("accuracy is:  XGB - {}   RF - {}   NN - {}".format(acc_xgb, acc_rf, acc_dl))
 
     if print_train:
         pred_xgb = xgb_learning(x_train, y_train, x_train, n_classes=n_classes, is_stand_ml=True)
@@ -281,7 +279,25 @@ def check_acc(x_train, y_train, x_test, y_test, n_classes=2, print_train=False):
         print("train accuracy is:  XGB - " + str(train_acc_xgb) +
               "   RF - " + str(train_acc_rf) + "   NN - " + str(train_acc_dl))
 
-    return acc_xgb, acc_dl, acc_rf
+    if not only_acc:
+        scores = {'XGB': {'acc': acc_xgb}, 'RF': {'acc': acc_rf}, 'NN': {'acc': acc_dl}}
+        scores['XGB']['mic_f1'] = f1_score(y_test, pred_xgb, average='micro')
+        scores['XGB']['mac_f1'] = f1_score(y_test, pred_xgb, average='macro')
+        scores['RF']['mic_f1'] = f1_score(y_test, pred_rf, average='micro')
+        scores['RF']['mac_f1'] = f1_score(y_test, pred_rf, average='macro')
+        # scores['XGB']['mic_f1'] = 0
+        # scores['XGB']['mac_f1'] = 0
+        # scores['RF']['mic_f1'] = 0
+        # scores['RF']['mac_f1'] = 0
+        scores['NN']['mic_f1'] = f1_score(y_test, pred_dl, average='micro')
+        scores['NN']['mac_f1'] = f1_score(y_test, pred_dl, average='macro')
+
+        # print(scores)
+        # print(Counter(y_test), Counter(pred_xgb), Counter(pred_rf), Counter(pred_dl))
+        # print(np.where(y_train==1), np.where(np.array(pred_xgb)==1), np.where(pred_rf==1), np.where(np.array(pred_dl)==1))
+        return scores
+
+    return acc_xgb, acc_rf, acc_dl
 
 
 class GraphNeighbors:
@@ -317,7 +333,7 @@ class GraphNeighbors:
                 for neighbor2 in self._iter_nodes_of_order(neighbor, order - 1):
                     yield (neighbor2)
 
-    def get_neighbors(self, node, second_order=True, self_node=True):
+    def get_neighbors(self, node, second_order=True, self_node=True, only_out=False):
         history = {}
 
         for edge in self._gnx.edges(node):
@@ -332,19 +348,19 @@ class GraphNeighbors:
                     neighbor2 = edge2[0]
                     if neighbor2 not in history:
                         history[neighbor2] = 2
-
-        for edge in self._gnx.in_edges(node):
-            neighbor = edge[0]
-            history[neighbor] = 1
-            if second_order:
-                for edge2 in self._gnx.edges(neighbor):
-                    neighbor2 = edge2[1]
-                    if neighbor2 not in history:
-                        history[neighbor2] = 2
-                for edge2 in self._gnx.in_edges(neighbor):
-                    neighbor2 = edge2[0]
-                    if neighbor2 not in history:
-                        history[neighbor2] = 2
+        if not only_out:
+            for edge in self._gnx.in_edges(node):
+                neighbor = edge[0]
+                history[neighbor] = 1
+                if second_order:
+                    for edge2 in self._gnx.edges(neighbor):
+                        neighbor2 = edge2[1]
+                        if neighbor2 not in history:
+                            history[neighbor2] = 2
+                    for edge2 in self._gnx.in_edges(neighbor):
+                        neighbor2 = edge2[0]
+                        if neighbor2 not in history:
+                            history[neighbor2] = 2
 
         history[node] = 0
         if not self_node:
@@ -354,13 +370,91 @@ class GraphNeighbors:
         orders = list(history.values())
         return neighbors, orders
 
-    def neighbors(self, second_order=True, self_node=True):
+    def neighbors(self, second_order=True, self_node=True, with_orders=True, only_out=False):
         neighbors_matrix = []
         nodes_order = sorted(self._gnx)
         for node in nodes_order:
-            neighbors, orders = self.get_neighbors(node, second_order=second_order, self_node=self_node)
+            neighbors, orders = self.get_neighbors(node, second_order=second_order, self_node=self_node,
+                                                   only_out=only_out)
             indices = [nodes_order.index(node) for node in neighbors]
-            neighbors_matrix.append(np.asmatrix([indices, orders]))
+            if with_orders:
+                neighbors_matrix.append(np.asmatrix([indices, orders]))
+            else:
+                neighbors_matrix.append(indices)
 
         return neighbors_matrix
+
+
+def k_truss(gnx: nx.Graph):
+    # g2 = nx.convert_node_labels_to_integers(gnx, ordering='sorted')
+    gnx.remove_edges_from(gnx.selfloop_edges())
+    nodes_order = sorted(gnx)
+    nodes_map = {nodes_order[i]: i for i in range(len(nodes_order))}
+    k_truss = np.zeros(len(nodes_order))
+    max_k_truss = 0
+    k = 1
+    k_core = nx.k_core(gnx, k)
+    while not nx.is_empty(k_core) and max_k_truss == k-1:
+        flag = True
+        while flag:
+            flag = False
+            # a = nx.adj_matrix(k_core).tocsr()
+            # a_square = a*a
+            edges_to_remove = []
+            for node in sorted(k_core):
+                for edge in k_core.out_edges(node):
+                    node2 = edge[1]
+                    # if a_square[node2, node] < k-2:
+                    if len(list(nx.algorithms.simple_paths.all_simple_paths(gnx, node2, node, 2))) < k - 2:
+                        edges_to_remove.append(edge)
+            if len(edges_to_remove) > 0:
+                k_core.remove_edges_from(edges_to_remove)
+                flag = True
+        for edge in k_core.out_edges:
+            max_k_truss = k
+            k_truss[nodes_map[edge[0]]] = k
+
+        k += 1
+        k_core = nx.k_core(gnx, k)
+
+    return k_truss
+
+
+def average_dist_from_random_set(gnx: nx.Graph, stop=0.8, iterations=1, change_to_undirect=True, batch_size=1):
+    if change_to_undirect:
+        gnx = gnx.to_undirected()
+    gnx = nx.convert_node_labels_to_integers(gnx)
+
+    length = dict(nx.all_pairs_shortest_path_length(gnx))
+    max_length = max([max(val.values()) for val in length.values()])
+    g_size = len(gnx.nodes())
+    a = np.ones([g_size, g_size]) * (max_length + 1)
+
+    for n1 in length.keys():
+        for n2 in length[n1].keys():
+            a[n1][n2] = length[n1][n2]
+
+    results = []
+
+    for i in range(iterations):
+        start_time = timeit.default_timer()
+        unlabeled = set((gnx.nodes()))
+        labeled = []
+        res = []
+        for _ in range(int(stop * g_size / batch_size)):
+            node = random.sample(unlabeled, batch_size)
+            labeled.extend(node)
+            unlabeled.difference_update(node)
+
+            min_len = [min(a[n1, labeled]) for n1 in unlabeled]
+            res.append(np.average(min_len))
+        results.append(res)
+        stop_time = timeit.default_timer()
+        print('finish {} iteration, time:{}'.format(i, stop_time - start_time))
+
+    results = np.array(results).mean(axis=0)
+    percents = [(i + 1) * batch_size / g_size for i in range(len(results))]
+
+    return percents, results
+
 

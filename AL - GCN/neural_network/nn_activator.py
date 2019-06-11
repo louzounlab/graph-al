@@ -12,12 +12,12 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 # class to train models
 class FeedForwardNet:
-    def __init__(self, model: nn.Module, train_size=0.8, gpu=False):
+    def __init__(self, model: nn.Module, train_size=0.85, class_weights=None, gpu=False):
         self._len_data = 0
         self._train_size = train_size
         # init models with current models
         self._model = model
-        self._gpu = gpu
+        self._gpu = gpu and torch.cuda.is_available()
         if self._gpu:
             self._model.cuda()
         # empty list for every model - y axis for plotting loss by epochs
@@ -25,6 +25,7 @@ class FeedForwardNet:
         self._train_loader = None
         self._train_validation = None
         self._data = None
+        self._class_weights = torch.Tensor(class_weights) if class_weights is not None else None
 
     def set_data(self, components, labels):
         self._data = SimpleDataSet(components, labels, gpu=self._gpu)
@@ -59,7 +60,8 @@ class FeedForwardNet:
                 # print progress
                 self._model.optimizer.zero_grad()               # zero gradients
                 output = self._model(data)                      # calc output of current model on the current batch
-                loss = F.cross_entropy(output, label)           # define loss node ( negative log likelihood)
+                loss = F.cross_entropy(output, label,
+                                       weight=self._class_weights)  # define loss node ( negative log likelihood)
                 loss.backward()                                 # back propagation
                 self._model.optimizer.step()                    # update weights
 

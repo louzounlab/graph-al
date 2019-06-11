@@ -25,7 +25,7 @@ from sklearn.metrics import f1_score
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cuda', type=int, default=1,
+    parser.add_argument('--cuda', type=int, default=0,
                         help='Specify cuda device number')
     parser.add_argument('--fastmode', action='store_true', default=False,
                         help='Validate during training pass.')      # fast mode will cancel early stopping
@@ -36,7 +36,7 @@ def parse_args():
                         help='Initial learning rate.')
     parser.add_argument('--weight_decay', type=float, default=5e-4,
                         help='Weight decay (L2 loss on parameters).')
-    parser.add_argument('--hidden', type=int, default=16,
+    parser.add_argument('--hidden', type=int, default=[16],
                         help='Number of hidden units.')
     parser.add_argument('--dropout', type=float, default=0.5,
                         help='Dropout rate (1 - keep probability).')
@@ -59,7 +59,7 @@ NEIGHBOR_FEATURES = {
 
 
 # parameters for early stopping
-After = 50      # after how many epochs start try early stopping
+After = 0      # after how many epochs start try early stopping
 Strikes = 10    # how many times in a row should the validation loss increase for stopping
 
 
@@ -126,7 +126,7 @@ class ModelRunner:
         topo_feat = self.loader.topo_mx
 
         # model1 = GCN(nfeat=bow_feat.shape[1],
-        #              hlayers=[self._conf["kipf"]["hidden"]],
+        #              hlayers=self._conf["kipf"]["hidden"],
         #              nclass=self.loader.num_labels,
         #              dropout=self._conf["kipf"]["dropout"])
         # opt1 = optim.Adam(model1.parameters(), lr=self._conf["kipf"]["lr"],
@@ -138,7 +138,7 @@ class ModelRunner:
         #                      nclass=self.loader.num_labels,
         #                      dropout=self._conf["dropout"])
         # opt2 = optim.Adam(model2.parameters(), lr=self._conf["lr"], weight_decay=self._conf["weight_decay"])
-
+        #
         # model3 = GCN(nfeat=topo_feat.shape[1],
         #              hlayers=self._conf["multi_hidden_layers"],
         #              nclass=self.loader.num_labels,
@@ -146,7 +146,7 @@ class ModelRunner:
         #              layer_type=None,
         #              is_regression=self.loader.regression)
         # opt3 = optim.Adam(model3.parameters(), lr=self._conf["lr"], weight_decay=self._conf["weight_decay"])
-
+        #
         model4 = GCN(nfeat=topo_feat.shape[1],
                      hlayers=self._conf["multi_hidden_layers"],
                      nclass=self.loader.num_labels,
@@ -413,7 +413,7 @@ def execute_runner(runner, train_p, num_iter=5, early_stopping=False, val_p=0.1)
     # test_p = 1000 / runner.loader.data_size
 
     runner.loader.split_test(test_p, build_features=True)
-    res = [runner.run(train_p, verbose=1, early_stopping=early_stopping, val_p=val_p) for _ in range(num_iter)]
+    res = [runner.run(train_p, verbose=2, early_stopping=early_stopping, val_p=val_p) for _ in range(num_iter)]
     aggregated = aggregate_results(res)
     result = {}
     for name, vals in aggregated.items():
@@ -427,17 +427,17 @@ def execute_runner(runner, train_p, num_iter=5, early_stopping=False, val_p=0.1)
     return result
 
 
-def build_model(dataset, path=None, dropout=0.6, lr=0.01, weight_decay=0.005, hidden_layers=[16], is_regression=False):
+def build_model(dataset, path=None, dropout=0.6, lr=0.01, weight_decay=0.005, hidden_layers=[16], is_regression=False,
+                features='neighbors'):
 
     args = parse_args()
 
     seed = random.randint(1, 1000000000)
     conf = {
-        # "kipf": {"hidden": args.hidden, "dropout": args.dropout, "lr": args.lr, "weight_decay": args.weight_decay},
-        "kipf": {"hidden": hidden_layers, "dropout": dropout, "lr": lr, "weight_decay": weight_decay},
+        "kipf": {"hidden": args.hidden, "dropout": args.dropout, "lr": args.lr, "weight_decay": args.weight_decay},
+        # "kipf": {"hidden": hidden_layers, "dropout": dropout, "lr": lr, "weight_decay": weight_decay},
         "hidden_layers": hidden_layers, "multi_hidden_layers": hidden_layers, "dropout": dropout, "lr": lr,
-        "weight_decay": weight_decay, "feat_type": "neighbors",
-        # "weight_decay": weight_decay, "feat_type": "features",
+        "weight_decay": weight_decay, "feat_type": features,
         "dataset": dataset, "epochs": args.epochs, "cuda": args.cuda, "fastmode": args.fastmode, "seed": seed}
 
     init_seed(conf['seed'], conf['cuda'])
