@@ -42,7 +42,8 @@ class NeuralNet(nn.Module):
             x = F.elu(x)
         if self._drop_out and not last_layer:
             x = F.dropout(x, p=self._drop_out)
-        return F.log_softmax(x) if last_layer else x
+        # return F.log_softmax(x) if last_layer else x
+        return x
 
     def forward(self, x):
         for i in range(self._num_layers - 1):
@@ -81,7 +82,7 @@ class NeuralNet3(nn.Module):
         x = F.relu(x)
         nn.Dropout(p=0.2)
         x = self._layer2(x)
-        x = F.log_softmax(x)
+        # x = F.log_softmax(x)
         return x
 
 
@@ -111,6 +112,6 @@ class ActiveLearningModel(nn.Module):
         x = self._layer1(x)
         x = F.relu(x)
         x = self._layer2(x)
-        x = F.log_softmax(x)
+        # x = F.log_softmax(x)
         return x
 
