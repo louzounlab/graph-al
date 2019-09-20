@@ -69,8 +69,7 @@ def active_learning(data, budget, batch=5, iterations=3, out_interval=25, eps=[0
 
 if __name__ == '__main__':
 	Data_Sets = ['cora']
-	epsilons = [0]
 	for dataset in Data_Sets:
-		active_learning(dataset, 0.15, out_interval=60, eps=e1, iterations=20, batch=1)
+		active_learning(dataset, 0.15, out_interval=60, iterations=20, batch=1)
 	
 ```

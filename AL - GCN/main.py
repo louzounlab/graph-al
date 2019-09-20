@@ -66,7 +66,7 @@ def active_learning(data, budget, batch=5, iterations=3, out_interval=25, eps=[0
         # run_active_model(model, 'rep_dist', *params, eps=epsilon, **{'representation_measure': 'local_outlier_factor',
         #                                                              'representation_region': True})
         # run_active_model(model, 'geo_dist', *params, eps=epsilon)
-        # run_active_model(model, 'RPR', *params, eps=epsilon)
+        # run_active_model(model, 'APR', *params, eps=epsilon)
         # run_active_model(model, 'centrality', *params, eps=epsilon)
         # run_active_model(model, 'feature', *params, eps=epsilon, **{'feature': 'attractor_basin'})
         # run_active_model(model, 'geo_cent', *params, eps=epsilon)
